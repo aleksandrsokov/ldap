@@ -1,0 +1,82 @@
+- name: LDAP
+  hosts: all
+  become: yes
+
+  tasks:
+  - name:  ===========Install Server ===========
+    block:
+      - name: install softs on rocky linux 9
+        dnf:
+          name:
+            - vim
+            - chrony
+          state: present
+          update_cache: true
+      
+      - name: Set up timezone
+        timezone:
+          name: "Europe/Moscow"
+      
+      - name: enable chrony
+        service:
+          name: chronyd
+          state: restarted
+          enabled: true
+      
+      - name: install ipa server
+        dnf: 
+          name: 
+            - ipa-server
+            - ipa-server-dns
+            - java-1.8.0-openjdk-devel 
+          state: present
+      
+      - name: add server to hosts
+        shell: echo "192.168.57.10 ipa.otus.lan ipa" >> /etc/hosts
+      
+      - name: enable firewalld
+        service:
+          name: firewalld
+          enabled: yes
+          state: started
+      
+      - name: enable firewald
+        shell: firewall-cmd --zone=public --add-service={freeipa-ldap,freeipa-ldaps,dns,ntp} --permanent && firewall-cmd --reload
+      
+      - name: ipa-server-install
+        shell: ipa-server-install --no-ntp --setup-dns --no-dnssec-validation  --forwarder=8.8.8.8 --allow-zone-overlap --reverse-zone=0.168.192.in-addr.arpa --hostname=ipa.otus.lan -r OTUS.LAN -n otus.lan --subject="O=IPA.OTUS.LAN" -p 12345678 -a 12345678 -U
+    when: (ansible_fqdn == "ipa.otus.lan")
+  
+  - name: server block
+    block:
+      - name: add server to hosts Client
+        shell: echo "192.168.57.10 ipa.otus.lan ipa" >> /etc/hosts
+    
+      - name: install softs on rocky linux 9 Client
+        dnf:
+          name:
+            - vim
+            - chrony
+          state: present
+          update_cache: true
+      
+      - name: Set up timezone Client
+        timezone:
+          name: "Europe/Moscow"
+      
+      - name: enable chrony Client
+        service:
+          name: chronyd
+          state: restarted
+          enabled: true
+    
+      - name: install module ipa-client
+        dnf:
+          name:
+            - freeipa-client
+          state: present
+      - name: add host to ipa-server
+        shell: echo -e "yes\nyes" | ipa-client-install --mkhomedir --domain=OTUS.LAN --server=ipa.otus.lan --no-ntp -p admin -w 12345678
+    when: (ansible_fqdn == "client1.otus.lan" or ansible_fqdn == "client2.otus.lan")  
+
+
